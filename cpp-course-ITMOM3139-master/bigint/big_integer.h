@@ -97,6 +97,8 @@ big_integer operator^(big_integer a, big_integer const& b);
 
 big_integer operator<<(big_integer a, int b);
 
+big_integer operator>>(big_integer a, int b);
+
 
 std::string to_string(big_integer const& a);
 std::ostream& operator<<(std::ostream& s, big_integer const& a);
