@@ -9,10 +9,26 @@
 
 using namespace std;
 
-const int BASEPOW = 1;
+const int BASEPOW = 15;
 const int BASE = (1 << BASEPOW);
-const int NEEDEDBITS = (1 << BASEPOW) - 1;
+const int NEEDEDBITS = BASE - 1;
+int rubbish;
 
+void normalize(int &signum, vector<int> &v)
+{
+    if (v.empty())
+    {
+        v.push_back(0);
+    }
+    while (v.size() != 1 && v.back() == 0)
+    {
+        v.pop_back();
+    }
+    if (v.size() == 1 && v.back() == 0)
+    {
+        signum = 0;
+    }
+}
 
 int comp(big_integer const& a, big_integer const& b, bool absCompare = false) {
     if (!absCompare && a.sign() != b.sign())
@@ -33,15 +49,15 @@ int comp(big_integer const& a, big_integer const& b, bool absCompare = false) {
     return 0;
 }
 
-void add(vector<int> &res, const vector<int> a, const vector<int> & b)
+void add(vector<int> &res, const vector<int> a, const vector<int> &b)
 {
-    res.resize(max(a.size(), b.size()));
     int carry = 0;
+    res.resize(max(a.size(), b.size()));
     for (size_t it = 0; it < max(a.size(), b.size()); ++it)
     {
         carry += (it < a.size() ? a[it] : 0) + (it < b.size() ? b[it] : 0);
-        res[it] = carry % BASE;
-        carry /= BASE;
+        res[it] = carry & NEEDEDBITS;
+        carry >>= BASEPOW;
     }
     if (carry != 0)
     {
@@ -62,10 +78,7 @@ void subtract(vector<int> &res, const vector<int> a, const vector<int> b)
         res[it] -= (it < b.size() ? b[it] : 0);
     }
 
-    while (res.size() > 1 && res.back() == 0)
-    {
-        res.pop_back();
-    }
+    normalize(rubbish, res);
 }
 
 void multiply(vector<int> &res, const vector<int> a, const vector<int> &b)
@@ -78,23 +91,20 @@ void multiply(vector<int> &res, const vector<int> a, const vector<int> &b)
         for (size_t j = 0; j < b.size(); j++)
         {
             res[i + j] += a[i] * b[j];
-            if(res[i + j] >= BASE) {
-                res[i + j + 1] += res[i + j] / BASE;
-                res[i + j] %= BASE;
+            if(res[i + j] > NEEDEDBITS) {
+                res[i + j + 1] += res[i + j] >> BASEPOW;
+                res[i + j] &= NEEDEDBITS;
             }
         }
     }
 
     for (size_t i = 0; i < res.size() - 1; i++)
     {
-        res[i + 1] += res[i] / BASE;
-        res[i] %= BASE;
+        res[i + 1] += res[i] >> BASEPOW;
+        res[i] &= NEEDEDBITS;
     }
 
-    while (res.size() > 1 && res.back() == 0)
-    {
-        res.pop_back();
-    }
+    normalize(rubbish, res);
 }
 
 
@@ -109,10 +119,7 @@ void shortDivMod(const int dividendBase, const int dividerBase, const vector<int
         res[it] = mod / dividerBase;
         mod %= dividerBase;
     }
-    while (res.size() > 1 && res.back() == 0)
-    {
-        res.pop_back();
-    }
+    normalize(rubbish, res);
 }
 
 
@@ -152,26 +159,7 @@ void longDiv(vector<int> &res, const vector<int> a, const vector<int> &b)
         }
     }
 
-    while (res.size() > 1 && res.back() == 0)
-    {
-        res.pop_back();
-    }
-}
-
-void normalize(int &signum, vector<int> &v)
-{
-    if (v.empty())
-    {
-        v.push_back(0);
-    }
-    while (v.size() != 1 && v.back() == 0)
-    {
-        v.pop_back();
-    }
-    if (v.size() == 1 && v.back() == 0)
-    {
-        signum = 0;
-    }
+    normalize(rubbish, res);
 }
 
 vector<int> to_byte(int sign, vector<int> v)
@@ -196,6 +184,15 @@ void print(int x, int base = BASEPOW) {
 
 }
 
+void print(const vector<int> &a) {
+    cout << a.size() << "\n";
+    for (auto x : a) {
+        print(x);
+        cout << " ";
+    }
+    cout << "\n";
+}
+
 big_integer from_byte(vector<int> v) {
     int sign = 1;
     if (v.back() == NEEDEDBITS)
@@ -216,21 +213,23 @@ big_integer from_byte(vector<int> v) {
         }
         if (!flag)
         {
-            v.back() = NEEDEDBITS;
+            v.back() = 1;
             v.push_back(NEEDEDBITS);
         }
     }
     v.pop_back();
     normalize(sign, v);
-    auto x = big_integer(sign, v);
-    return x;
+    return big_integer(sign, v);
 }
+
 
 enum operation { XOR, OR, AND };
 
 big_integer byteFunctionBigInteger(const vector<int> &a, const vector<int> &b, operation op)
 {
     vector<int> res(max(a.size(), b.size()));
+//    print(a);
+//    print(b);
     for(int i = 0; i < res.size(); i++)
     {
         switch(op)
@@ -241,6 +240,7 @@ big_integer byteFunctionBigInteger(const vector<int> &a, const vector<int> &b, o
             default: break;
         }
     }
+//    print(res);
     return from_byte(res);
 }
 
@@ -367,10 +367,7 @@ big_integer& big_integer::operator+=(big_integer const& rhs)
     {
         subtract(v, v, rhs.v);
     }
-    if (comp(*this, ZERO, true) == 0)
-    {
-        signum = 0;
-    }
+    normalize(signum, v);
     return *this;
 }
 
@@ -383,6 +380,7 @@ big_integer& big_integer::operator*=(big_integer const& rhs)
 {
     multiply(v, v, rhs.v);
     signum *= rhs.sign();
+    normalize(signum, v);
     return *this;
 }
 
@@ -390,24 +388,13 @@ big_integer& big_integer::operator/=(big_integer const& rhs)
 {
     longDiv(v, v, rhs.v);
     signum *= rhs.signum;
-    if (comp(*this, ZERO, true) == 0)
-    {
-        signum = 0;
-    }
+    normalize(signum, v);
     return *this;
 }
 
 big_integer& big_integer::operator%=(big_integer const& rhs)
 {
-    auto x = *this;
-    x /= rhs;
-    x *= rhs;
-    *this -= x;
-    if (comp(*this, ZERO, true) == 0)
-    {
-        signum = 0;
-    }
-    return *this;
+    return (*this = *this - (*this / rhs) * rhs);
 }
 
 big_integer& big_integer::operator&=(big_integer const& rhs)
@@ -418,26 +405,22 @@ big_integer& big_integer::operator&=(big_integer const& rhs)
 
 big_integer& big_integer::operator|=(big_integer const& rhs)
 {
-    *this = byteFunctionBigInteger(to_byte(sign(), v), to_byte(rhs.sign(), rhs.v), OR);
-    return *this;
+    return (*this = byteFunctionBigInteger(to_byte(sign(), v), to_byte(rhs.sign(), rhs.v), OR));
 }
 
 big_integer& big_integer::operator^=(big_integer const& rhs)
 {
-    *this = byteFunctionBigInteger(to_byte(sign(), v), to_byte(rhs.sign(), rhs.v), XOR);
-    return *this;
+    return (*this = byteFunctionBigInteger(to_byte(sign(), v), to_byte(rhs.sign(), rhs.v), XOR));
 }
 
 big_integer& big_integer::operator<<=(int rhs)
 {
-    *this = leftShift(to_byte(sign(), v), rhs);
-    return *this;
+    return (*this = leftShift(to_byte(sign(), v), rhs));
 }
 
 big_integer& big_integer::operator>>=(int rhs)
 {
-    *this = rightShift(to_byte(sign(), v), rhs);
-    return *this;
+    return (*this = rightShift(to_byte(sign(), v), rhs));
 }
 
 big_integer big_integer::operator+() const
@@ -452,8 +435,7 @@ big_integer big_integer::operator-() const
 
 big_integer big_integer::operator~() const
 {
-    big_integer r(-signum, v);
-    return r -= ONE;
+    return -*this - ONE;
 }
 
 big_integer& big_integer::operator++()
@@ -595,31 +577,26 @@ std::istream& operator>>(std::istream &s, big_integer &a)
 
 int main()
 {
+//    big_integer x, y;
+//    cin >> x >> y;
+//    cout << x * y;
 
-    big_integer a("-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-    big_integer b(                                                     "-100000000000000000000000000000000000000");
-    big_integer c( "100000000000000000000000000000000000000000000000000000");
-    cout << a / b << "\n" << c << "\n";
-    a = big_integer("-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-    b = big_integer(                                                      "100000000000000000000000000000000000000");
-    c = big_integer("-100000000000000000000000000000000000000000000000000000");
-    cout << a / b << "\n" << c << "\n";
-    a = big_integer("10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-    b = big_integer(                                                     "100000000000000000000000000000000000000");
-    c = big_integer("100000000000000000000000000000000000000000000000000000");
-    cout << a / b << "\n" << c << "\n";
-    a = big_integer("18446744073709551616");
-    b = big_integer("340282366920938463463374607431768211456");
-    c = big_integer("115792089237316195423570985008687907853269984665640564039457584007913129639936");
-    assert(a * a == b);
-    assert(b * b == c);
-    a = big_integer("-100000000000000000000000000");
-    c = big_integer("100000000000000000000000000"
-                   "00000000000000000000000000");
-    assert(a * a == c);
-    a = big_integer ("-1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-    b = big_integer (                                                     "100000000000000000000000000000000000000");
-    c = big_integer ("-1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-                                                                        "00000000000000000000000000000000000000");
-    assert(a * b == c);
+//    print(-216, 30);
+//    cout << "\n";
+//    print(-253, 30);
+//    cout << "\n";
+//    cout << (big_integer(-216) & big_integer(-253)) << "\n";
+//    cout << ((-216) & (-253)) << "\n";
+//    return 0;
+//    for(int i = 0; i < 1e+5; i++) {
+//        int x = rand() - rand();int y = rand() % 5;
+////        if(to_string(x & y) != to_string(big_integer(x) & big_integer(y))) {
+////            cout << x << ' ' << y << "\n";
+////            break;
+////        }
+//        assert(to_string(x >> y) == to_string(big_integer(x) >> (y)));
+//        assert(to_string(x << y) == to_string(big_integer(x) << (y)));
+////        assert(to_string(x ^ y) == to_string(big_integer(x) ^ big_integer(y)));
+//    }
+    return 0;
 }
