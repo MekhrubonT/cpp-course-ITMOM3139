@@ -9,7 +9,7 @@
 
 using namespace std;
 
-const int BASEPOW = 15;
+const int BASEPOW = 29;
 const int BASE = (1 << BASEPOW);
 const int NEEDEDBITS = BASE - 1;
 int rubbish;
@@ -90,15 +90,13 @@ void multiply(vector<int> &res, const vector<int> a, const vector<int> &b)
     {
         for (size_t j = 0; j < b.size(); j++)
         {
-            res[i + j] += a[i] * b[j];
-            if(res[i + j] > NEEDEDBITS) {
-                res[i + j + 1] += res[i + j] >> BASEPOW;
-                res[i + j] &= NEEDEDBITS;
-            }
+            __int64_t x = (__int64_t)a[i] * b[j] + res[i + j];
+            res[i + j + 1] += (x >> BASEPOW);
+            res[i + j] = (x & NEEDEDBITS);
         }
     }
 
-    for (size_t i = 0; i < res.size() - 1; i++)
+    for (int i = 0; i + 1 < (int)res.size(); i++)
     {
         res[i + 1] += res[i] >> BASEPOW;
         res[i] &= NEEDEDBITS;
@@ -107,18 +105,17 @@ void multiply(vector<int> &res, const vector<int> a, const vector<int> &b)
     normalize(rubbish, res);
 }
 
-
-
-void shortDivMod(const int dividendBase, const int dividerBase, const vector<int> &a, vector<int> & res, int &mod)
+void shortDivMod(const int dividendBase, const int divider, const vector<int> &a, vector<int> & res, int &mod)
 {
-    mod = 0;
+    __int64_t cur = 0;
     res.resize(a.size(), 0);
     for (int it = (int)a.size() - 1; it >= 0; it--)
     {
-        mod = mod * dividendBase + a[it];
-        res[it] = mod / dividerBase;
-        mod %= dividerBase;
+        cur = cur * dividendBase + a[it];
+        res[it] = cur / divider;
+        cur %= divider;
     }
+    mod = (int) cur;
     normalize(rubbish, res);
 }
 
@@ -130,6 +127,13 @@ void longDiv(vector<int> &res, const vector<int> a, const vector<int> &b)
         res = {0};
         return;
     }
+
+    if (b.size() == 1)
+    {
+        shortDivMod(BASE, b[0], a, res, rubbish);
+        return;
+    }
+
     vector<int> temp, pref;
     res.resize(a.size() - b.size() + 2);
     fill(res.begin(), res.end(), 0);
@@ -152,7 +156,7 @@ void longDiv(vector<int> &res, const vector<int> a, const vector<int> &b)
         res[it] = l - 1;
         multiply(temp, {res[it]}, b);
         subtract(pref, pref, temp);
-        while (pref.back() == 0)
+        while (!pref.empty() && pref.back() == 0)
         {
             pref.pop_back();
 
@@ -200,7 +204,7 @@ big_integer from_byte(vector<int> v) {
         sign = -1;
         v[0]--;
         bool flag = false;
-        for(int i = 0; i + 1 < v.size(); i++)
+        for(int i = 0; i + 1 < (int)v.size(); i++)
         {
             if (v[i] < 0)
             {
@@ -228,9 +232,7 @@ enum operation { XOR, OR, AND };
 big_integer byteFunctionBigInteger(const vector<int> &a, const vector<int> &b, operation op)
 {
     vector<int> res(max(a.size(), b.size()));
-//    print(a);
-//    print(b);
-    for(int i = 0; i < res.size(); i++)
+    for(int i = 0; i < (int)res.size(); i++)
     {
         switch(op)
         {
@@ -240,7 +242,6 @@ big_integer byteFunctionBigInteger(const vector<int> &a, const vector<int> &b, o
             default: break;
         }
     }
-//    print(res);
     return from_byte(res);
 }
 
@@ -266,7 +267,7 @@ big_integer rightShift(const vector<int> &a, int shift)
     int last = a.back(), i = shift / BASEPOW;
     shift %= BASEPOW;
     int cur = a[i] >> shift;
-    while(i + 1 < a.size())
+    while(i + 1 < (int)a.size())
     {
         cur = cur + (a[i + 1] << (BASEPOW - shift));
         res.push_back(cur & NEEDEDBITS);
@@ -304,8 +305,8 @@ big_integer::big_integer(int a)
     a = abs(a);
     for (size_t it = 0; a != 0; it++)
     {
-        v.push_back(a % BASE);
-        a /= BASE;
+        v.push_back(a & NEEDEDBITS);
+        a >>= BASEPOW;
     }
     normalize(signum, v);
 }
@@ -314,7 +315,6 @@ big_integer ZERO(0), ONE(1);
 
 big_integer::big_integer(std::string const& str)
 {
-    int st = 0, cur = 0;
     vector<int> temp;
     signum = 1;
     for (auto x : str)
@@ -399,8 +399,7 @@ big_integer& big_integer::operator%=(big_integer const& rhs)
 
 big_integer& big_integer::operator&=(big_integer const& rhs)
 {
-    *this = byteFunctionBigInteger(to_byte(sign(), v), to_byte(rhs.sign(), rhs.v), AND);
-    return *this;
+    return *this = byteFunctionBigInteger(to_byte(sign(), v), to_byte(rhs.sign(), rhs.v), AND);
 }
 
 big_integer& big_integer::operator|=(big_integer const& rhs)
@@ -512,7 +511,6 @@ big_integer operator>>(big_integer a, int b)
     return a >>= b;
 }
 
-
 bool operator==(big_integer const& a, big_integer const& b)
 {
     return !comp(a, b);
@@ -573,30 +571,4 @@ std::istream& operator>>(std::istream &s, big_integer &a)
     s >> d;
     a = big_integer(d);
     return s;
-}
-
-int main()
-{
-//    big_integer x, y;
-//    cin >> x >> y;
-//    cout << x * y;
-
-//    print(-216, 30);
-//    cout << "\n";
-//    print(-253, 30);
-//    cout << "\n";
-//    cout << (big_integer(-216) & big_integer(-253)) << "\n";
-//    cout << ((-216) & (-253)) << "\n";
-//    return 0;
-//    for(int i = 0; i < 1e+5; i++) {
-//        int x = rand() - rand();int y = rand() % 5;
-////        if(to_string(x & y) != to_string(big_integer(x) & big_integer(y))) {
-////            cout << x << ' ' << y << "\n";
-////            break;
-////        }
-//        assert(to_string(x >> y) == to_string(big_integer(x) >> (y)));
-//        assert(to_string(x << y) == to_string(big_integer(x) << (y)));
-////        assert(to_string(x ^ y) == to_string(big_integer(x) ^ big_integer(y)));
-//    }
-    return 0;
 }

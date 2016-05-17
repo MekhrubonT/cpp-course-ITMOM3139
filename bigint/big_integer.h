@@ -4,7 +4,7 @@
 struct big_integer {
     big_integer();
 
-    big_integer(int sign, const std::vector<int> &other);
+    big_integer(int sign, const std::vector<int>& other);
     big_integer(big_integer const& other);
     big_integer(int a);
     explicit big_integer(std::string const& str);
@@ -53,10 +53,6 @@ struct big_integer {
 
     int sign() const {
         return signum;
-    }
-
-    int bucket(int pos) const {
-        return v[pos];
     }
 
 
