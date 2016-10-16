@@ -1,10 +1,11 @@
 #ifndef BIG_INTEGER_H
 #define BIG_INTEGER_H
 
+// Список инициализации
+
 struct big_integer {
     big_integer();
 
-    big_integer(int sign, const std::vector<int>& other);
     big_integer(big_integer const& other);
     big_integer(int a);
     explicit big_integer(std::string const& str);
@@ -47,19 +48,32 @@ struct big_integer {
 
     friend std::string to_string(big_integer const& a);
 
-    size_t size() const {
-        return v.size();
-    }
 
-    int sign() const {
-        return signum;
-    }
+
 
 
 private:
-    std::vector<int> v;
-    int signum;
+    size_t size() const
+    {
+        return v.size();
+    }
+
+    friend big_integer from_byte(std::vector<unsigned> &v);
+
+    big_integer(int sign, const std::vector<unsigned>& other);
+
+    friend void longDiv(std::vector<unsigned> &res, const std::vector<unsigned> a, const std::vector<unsigned> &b);
+
+    friend big_integer from_byte(std::vector<unsigned> v);
+
+    int sign() const { // private
+        return signum;
+    }
+
     friend int comp(big_integer const& a, big_integer const& b, bool absCompare);
+
+    int signum; // private
+    std::vector<unsigned> v; // private
 };
 
 bool operator==(big_integer const& a, big_integer const& b);

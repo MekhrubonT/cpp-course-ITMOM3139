@@ -631,3 +631,4 @@ TEST(correctness, mul_merge_randomized)
         EXPECT_TRUE(a == b);
     }
 }
+
