@@ -622,8 +622,10 @@ TEST(correctness, mul_merge_randomized)
     for (unsigned itn = 0; itn != number_of_iterations; ++itn)
     {
         std::vector<big_integer> x;
-        for (size_t i = 0; i != number_of_multipliers; ++i)
+        for (size_t i = 0; i != number_of_multipliers; ++i) {
+//            std::cout << myrand() << "\n";
             x.push_back(myrand());
+        }
 
         big_integer a = merge_all(x);
         big_integer b = merge_all(x);

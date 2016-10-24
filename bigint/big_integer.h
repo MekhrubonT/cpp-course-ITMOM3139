@@ -4,6 +4,8 @@
 // Список инициализации
 
 struct big_integer {
+friend int main();
+
     big_integer();
 
     big_integer(big_integer const& other);
@@ -53,28 +55,109 @@ struct big_integer {
 
 
 private:
-    size_t size() const
-    {
-        return v.size();
-    }
 
-    friend big_integer from_byte(std::vector<unsigned> &v);
+    struct vector {
+        struct node {
+            unsigned *s;
+            unsigned capacity;
+            node (unsigned capacity, unsigned *d);
 
-    big_integer(int sign, const std::vector<unsigned>& other);
+            void update_capacity(unsigned, unsigned, bool);
+            void ensure_capacity(unsigned);
+        };
 
-    friend void longDiv(std::vector<unsigned> &res, const std::vector<unsigned> a, const std::vector<unsigned> &b);
+        const static unsigned SIGN_BIT = 30;
+        const static unsigned MODE_BIT = 31;
+        const static unsigned SIZE_CONST = ~0 ^ (1 << SIGN_BIT) ^ (1 << MODE_BIT);
+        const static unsigned SMALL_OBJECT = 0;
+        const static unsigned SMALL_OBJECT_SIZE = sizeof(node) / sizeof(unsigned);
 
-    friend big_integer from_byte(std::vector<unsigned> v);
+        void flip_to_small_object();
+        void flip_from_small_object(unsigned, unsigned);
 
-    int sign() const { // private
-        return signum;
-    }
+        vector();
+        ~vector();
+        template <typename T>
+        vector(const T& x);
+        vector(const vector& x);
 
+
+        vector(unsigned, unsigned, int sign);
+        vector& operator=(vector const &other);
+        union SMO {
+            node x;
+            unsigned s[SMALL_OBJECT_SIZE];
+            SMO(unsigned capacity, unsigned value);
+//            SMO()
+        };
+
+        void push_back(unsigned);
+        void insert(unsigned*, int x);
+        void resize(unsigned);
+        void pop_back();
+        void clear();
+
+        unsigned size() const;
+        int sign() const;
+        int mode() const;
+
+        void set_size(unsigned d);
+        void set_mode(unsigned x);
+        void set_sign(unsigned x);
+
+        unsigned& back();
+        const unsigned back() const;
+        bool empty() const;
+
+
+        unsigned* begin();
+        unsigned const* begin() const;
+        unsigned* end();
+        unsigned const* end() const;
+
+        unsigned& operator[](unsigned ind);
+        unsigned const operator[](unsigned ind) const;
+
+        SMO v;
+        unsigned sz;
+    } data;
+
+    friend void swap(vector&, vector&);
+    friend vector to_byte(int sign, vector v);
+
+    int sign() const;
+    unsigned size() const;
+    int mode() const;
+    void set_sign(unsigned);
+    void set_size(unsigned);
+    void set_mode(int);
+
+    enum operation { XOR, OR, AND };
+
+    friend big_integer byteFunctionBigInteger(const big_integer::vector &a, const big_integer::vector &b, operation op);
+    friend big_integer leftShift(const vector &a, int shift);
+    friend big_integer rightShift(const vector &a, int shift);
+
+    big_integer(int sign, const big_integer::vector &other);
+
+
+    friend big_integer from_byte(vector&);
+    friend int comp(const big_integer::vector& a, const big_integer::vector &b, bool absCompare);
     friend int comp(big_integer const& a, big_integer const& b, bool absCompare);
+    friend int normalize(big_integer::vector&, int);
+    friend void add(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b);
+    friend void subtract(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b);
+    friend void multiplyShort(big_integer::vector&, const big_integer::vector&, uint64_t);
+    friend void multiply(big_integer::vector&, const big_integer::vector&, const big_integer::vector&);
+    friend unsigned shortDivMod(const int64_t, const int64_t, const big_integer::vector&, big_integer::vector&, unsigned);
+    friend void longDiv(big_integer::vector&, const big_integer::vector, const big_integer::vector&);
 
-    int signum; // private
-    std::vector<unsigned> v; // private
+
+//    int signum; // private
+//    std::vector<unsigned> v; // private
 };
+
+void swap(big_integer::vector& a, big_integer::vector& b);
 
 bool operator==(big_integer const& a, big_integer const& b);
 
@@ -110,6 +193,5 @@ big_integer operator<<(big_integer a, int b);
 big_integer operator>>(big_integer a, int b);
 
 
-std::string to_string(big_integer const& a);
 std::ostream& operator<<(std::ostream& s, big_integer const& a);
 #endif // BIG_INTEGER_H
