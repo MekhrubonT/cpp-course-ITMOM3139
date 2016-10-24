@@ -13,22 +13,21 @@ const int64_t BASEPOW = 32;
 const int64_t BASE = (1ll << BASEPOW);
 const int64_t NEEDEDBITS = BASE - 1;
 
-
-big_integer::vector::node::node(unsigned capacity, unsigned *d) : s(d), capacity(capacity) {}
-
-big_integer::vector::SMO::SMO(unsigned capacity = 0, unsigned value = 0) {
-    if (capacity <= big_integer::vector::SMALL_OBJECT_SIZE) {
-        memset(s, 0, sizeof(s));
-        fill(s, s + capacity, value);
-    } else {
-        x.capacity = capacity;
-        x.s = new unsigned[capacity];
-        fill(x.s, x.s + capacity, value);
-    }
+big_integer::vector::vector() : sz(0) {
+    memset(small, 0, sizeof(small));
+    def = small;
 }
-big_integer::vector::vector() : v(), sz(0) {}
 
-big_integer::vector::vector(unsigned sz, unsigned value, int sg = 0) : v(sz, value), sz(0) {
+big_integer::vector::vector(unsigned sz, unsigned value, int sg = 0) : sz(0) {
+    if (sz <= big_integer::vector::SMALL_OBJECT_SIZE) {
+        memset(small, 0, sizeof(small));
+        fill(small, small + sz, value);
+        def = small;
+    } else {
+        x.capacity = sz;
+        def = x.s = new unsigned[sz];
+        fill(x.s, x.s + sz, value);
+    }
     set_size(sz);
     set_sign(sg);
     set_mode(sz <= SMALL_OBJECT_SIZE ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
@@ -36,39 +35,40 @@ big_integer::vector::vector(unsigned sz, unsigned value, int sg = 0) : v(sz, val
 
 big_integer::vector::~vector() {
     if (mode() != SMALL_OBJECT) {
-        delete[] v.x.s;
+        delete[] x.s;
     }
 }
 
 template <typename T>
-big_integer::vector::vector(const T& x) {
-    set_size(x.size());
+big_integer::vector::vector(const T& other) {
+    set_size(other.size());
     set_sign(0);
-    set_mode(size() <= 3 ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
+    set_mode(size() <= SMALL_OBJECT_SIZE ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
     if (mode() == SMALL_OBJECT) {
-        memcpy(v.s, x.begin(), sizeof(unsigned) * x.size());
+        copy(other.begin(), other.end(), small);
+        def = small;
     } else {
-        v.x.capacity = size();
-        v.x.s = new unsigned[size()];
-        memcpy(v.x.s, x.begin(), sizeof(unsigned) * x.size());
+        x.capacity = size();
+        def = x.s = new unsigned[size()];
+        copy(other.begin(), other.end(), x.s);
     }
 }
-big_integer::vector::vector(const big_integer::vector& x) {
-    set_size(x.size());
-    set_sign(x.sign());
+big_integer::vector::vector(const big_integer::vector& other) {
+    set_size(other.size());
+    set_sign(other.sign());
     set_mode(size() <= 3 ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
     if (mode() == SMALL_OBJECT) {
-        memcpy(v.s, x.begin(), sizeof(unsigned) * x.size());
+        memcpy(small, other.begin(), sizeof(unsigned) * other.size());
+        def = small;
     } else {
-        v.x.capacity = size();
-        v.x.s = new unsigned[size()];
-        memcpy(v.x.s, x.begin(), sizeof(unsigned) * x.size());
+        x.capacity = size();
+        def = x.s = new unsigned[size()];
+        memcpy(x.s, other.begin(), sizeof(unsigned) * other.size());
     }
 }
 
 
 big_integer::vector& big_integer::vector::operator=(vector const &other) {
-
     if (begin() != other.begin()) {
         clear();
         for (auto x : other)
@@ -80,8 +80,9 @@ big_integer::vector& big_integer::vector::operator=(vector const &other) {
 
 void big_integer::vector::clear() {
     if (mode() != SMALL_OBJECT)
-        delete[] v.x.s;
-    memset(v.s, 0, sizeof(v.s));
+        delete[] x.s;
+    memset(small, 0, sizeof(small));
+    def = small;
     sz = 0;
 }
 
@@ -109,21 +110,21 @@ const unsigned big_integer::vector::back() const {
 }
 
 unsigned& big_integer::vector::operator[](unsigned ind) {
-    return mode() == SMALL_OBJECT ? v.s[ind] : v.x.s[ind];
+    return *(begin() + ind);
 }
 
 const unsigned big_integer::vector::operator[](unsigned ind) const {
-    return mode() == SMALL_OBJECT ? v.s[ind] : v.x.s[ind];
+    return *(begin() + ind);
 }
 
 unsigned* big_integer::vector::begin() {
-    return mode() == SMALL_OBJECT ? v.s : v.x.s;
+    return mode() == SMALL_OBJECT ? small : x.s;
 }
 unsigned* big_integer::vector::end() {
     return begin() + size();
 }
 unsigned const* big_integer::vector::begin() const {
-    return mode() == SMALL_OBJECT ? v.s : v.x.s;
+    return mode() == SMALL_OBJECT ? small : x.s;
 }
 unsigned const* big_integer::vector::end() const {
     return begin() + size();
@@ -145,39 +146,38 @@ void big_integer::vector::set_sign(unsigned x) {
 
 
 void big_integer::vector::flip_to_small_object() {
-    unsigned* d = v.x.s;
-    memcpy(v.s, d, sizeof(v.s));
+    unsigned* d = x.s;
+    memcpy(small, d, sizeof(small));
     delete[] d;
+    def = small;
     set_mode(SMALL_OBJECT);
 }
 
 void big_integer::vector::flip_from_small_object(unsigned old_size, unsigned capacity = 10) {
     unsigned *d = new unsigned[capacity];
     memset(d, 0, sizeof(unsigned) * capacity);
-    memcpy(d, v.s, sizeof(v.s));
+    memcpy(d, small, sizeof(small));
     set_mode(SMALL_OBJECT ^ 1);
-    v.x.capacity = capacity;
-    v.x.s = d;
+    x.capacity = capacity;
+    def = x.s = d;
 }
 
 
-void big_integer::vector::node::update_capacity(unsigned new_capacity, unsigned copy_size, bool fill_zero = false) {
+void big_integer::vector::update_capacity(unsigned new_capacity, unsigned copy_size) {
     unsigned* d = new unsigned[new_capacity];
-    if (fill_zero && sizeof(d) > sizeof(s)) {
-        memset(d, 0, sizeof(unsigned) * copy_size);
-    }
-    memcpy(d, s, sizeof(unsigned) * copy_size);
-    delete[] s;
-    s = d;
+    memset(d, 0, sizeof(unsigned) * new_capacity);
+    memcpy(d, x.s, sizeof(unsigned) * copy_size);
+    delete[] x.s;
+    def = x.s = d;
 }
 
-void big_integer::vector::node::ensure_capacity(unsigned new_size) {
-    if (new_size > capacity) {
-        update_capacity(capacity << 1, capacity);
-        capacity <<= 1;
-    } else if (new_size * 4 < capacity) {
-        update_capacity(capacity >> 1, capacity >> 1);
-        capacity >>= 1;
+void big_integer::vector::ensure_capacity(unsigned new_size) {
+    if (new_size > x.capacity) {
+        update_capacity(x.capacity << 1, x.capacity);
+        x.capacity <<= 1;
+    } else if (new_size * 4 < x.capacity) {
+        update_capacity(x.capacity >> 1, x.capacity >> 1);
+        x.capacity >>= 1;
     }
 }
 
@@ -187,10 +187,10 @@ void big_integer::vector::push_back(unsigned d) {
         flip_from_small_object(SMALL_OBJECT_SIZE);
     }
     if (mode() == SMALL_OBJECT) {
-        v.s[size()] = d;
+        small[size()] = d;
     } else {
-        v.x.ensure_capacity(size() + 1);
-        v.x.s[size()] = d;
+        ensure_capacity(size() + 1);
+        x.s[size()] = d;
     }
     sz++;
 }
@@ -208,7 +208,7 @@ void big_integer::vector::insert(unsigned* place, int x) {
 void big_integer::vector::pop_back() {
     sz--;
     if (mode() != SMALL_OBJECT) {
-        v.x.ensure_capacity(size());
+        ensure_capacity(size());
     }
     if (size() == SMALL_OBJECT_SIZE) {
         flip_to_small_object();
@@ -216,38 +216,26 @@ void big_integer::vector::pop_back() {
 }
 
 void big_integer::vector::resize(unsigned new_size) {
-//    if (mode() == SMALL_OBJECT) {
+//    if (mode() == SMALL_OBJECT && new_size > SMALL_OBJECT_SIZE) {
+//        flip_from_small_object(size(), new_size);
+//        set_size(new_size);
+//    } else if (mode() != SMALL_OBJECT && x.capacity * 2 <= new_size){
+//        update_capacity(new_size, size());
+//        x.capacity = new_size;
+//        set_size(new_size);
+//    } else if (mode() != SMALL_OBJECT && x.capacity > 2 * new_size) {
+//        int d = max(SMALL_OBJECT_SIZE + 1, new_size);
+//        update_capacity(d, d);
+//        x.capacity = d;
+//        set_size(d);
 //        while (size() > new_size)
 //            pop_back();
-//        if (new_size > SMALL_OBJECT_SIZE) {
-//            flip_from_small_object(size(), new_size);
-//            set_size(new_size);
-//        } else {
-//            while (size() < new_size)
-//                push_back(0);
-//        }
 //    } else {
-////        if (v.x.capacity * 2 <= new_size) {
-////            v.x.update_capacity(new_size, v.x.capacity, true);
-////            v.x.capacity = new_size;
-////        } else if (v.x.capacity > 2 * new_size) {
-////            unsigned x = SMALL_OBJECT_SIZE;
-////            int d = max(x, new_size);
-////            v.x.update_capacity(d, d);
-////            v.x.capacity = d;
-////            while (size() > new_size)
-////                pop_back();
-////
-////        } else {
-////        }
         while (size() < new_size)
             push_back(0);
-        while (size() > new_size) {
+        while (size() > new_size)
             pop_back();
-        }
 //    }
-//    set_size(new_size);
-
 }
 
 int normalize(big_integer::vector &a, int signum = 0)
@@ -265,9 +253,6 @@ int normalize(big_integer::vector &a, int signum = 0)
     return (a.size() == 1 && a.back() == 0) ? 0 : signum;
 }
 
-/// ####################### HERE IS OK #########################
-
-//template<typename T, typename U>
 int comp(const big_integer::vector& a, const big_integer::vector &b, bool absCompare = false) {
     if (!absCompare && a.sign() != b.sign())
         return b.sign()- a.sign();
@@ -287,7 +272,6 @@ int comp(big_integer const& a, big_integer const& b, bool absCompare = false) {
     return comp(a.data, b.data, absCompare);
 }
 
-//template<typename T>
 void add(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b)
 {
     uint64_t carry = 0;
@@ -329,7 +313,6 @@ void subtract(big_integer::vector &res, const big_integer::vector &a, const big_
 void multiplyShort(big_integer::vector &res, const big_integer::vector &a, uint64_t b)
 {
     res.resize(a.size());
-//    res.clear();
     uint64_t x = 0;
     for (unsigned i = 0; i < a.size(); i++) {
         x += (uint64_t) a[i] * b;
@@ -352,13 +335,11 @@ void multiply(big_integer::vector &res, const big_integer::vector &a, const big_
             buf[i + j] = (x & NEEDEDBITS);
         }
     }
-
     res.resize(buf.size() - 1);
     for (unsigned i = 0; i + 1 < buf.size(); i++) {
         buf[i + 1] += (buf[i] >> BASEPOW);
         res[i] = (buf[i] & NEEDEDBITS);
     }
-
     normalize(res, 0);
 }
 
@@ -422,12 +403,6 @@ void longDiv(big_integer::vector &res, const big_integer::vector a, const big_in
             pref.pop_back();
         }
     }
-//    cout << "Res=\n";
-//    cout << res.size() << "\n";
-//    for (auto x : res)
-//        cout << x << ' ';
-//    cout << "\n";
-
     normalize(res);
 }
 
@@ -623,7 +598,6 @@ big_integer& big_integer::operator-=(big_integer const& rhs)
 big_integer& big_integer::operator*=(big_integer const& rhs)
 {
     multiply(data, data, rhs.data);
-//    std::cout << signum << ' ' << rhs.sign() << "\n";
     set_sign(normalize(data, sign() ^ rhs.sign()));
     return *this;
 }
@@ -693,66 +667,54 @@ big_integer big_integer::operator++(int)
     return r;
 }
 
-big_integer& big_integer::operator--()
-{
+big_integer& big_integer::operator--() {
     return *this -= ONE;
 }
 
-big_integer big_integer::operator--(int)
-{
+big_integer big_integer::operator--(int) {
     big_integer r = *this;
     --*this;
     return r;
 }
 
-big_integer operator+(big_integer a, big_integer const& b)
-{
+big_integer operator+(big_integer a, big_integer const& b) {
     return a += b;
 }
 
-big_integer operator-(big_integer a, big_integer const& b)
-{
+big_integer operator-(big_integer a, big_integer const& b) {
     return a -= b;
 }
 
-big_integer operator*(big_integer a, big_integer const& b)
-{
+big_integer operator*(big_integer a, big_integer const& b) {
     return a *= b;
 }
 
-big_integer operator/(big_integer a, big_integer const& b)
-{
+big_integer operator/(big_integer a, big_integer const& b) {
     return a /= b;
 }
 
-big_integer operator%(big_integer a, big_integer const& b)
-{
+big_integer operator%(big_integer a, big_integer const& b) {
     return a %= b;
 }
 
-big_integer operator&(big_integer a, big_integer const& b)
-{
+big_integer operator&(big_integer a, big_integer const& b) {
     return a &= b;
 }
 
-big_integer operator|(big_integer a, big_integer const& b)
-{
+big_integer operator|(big_integer a, big_integer const& b) {
     return a |= b;
 }
 
-big_integer operator^(big_integer a, big_integer const& b)
-{
+big_integer operator^(big_integer a, big_integer const& b) {
     return a ^= b;
 }
 
-big_integer operator<<(big_integer a, int b)
-{
+big_integer operator<<(big_integer a, int b) {
     return a <<= b;
 }
 
 
-big_integer operator>>(big_integer a, int b)
-{
+big_integer operator>>(big_integer a, int b) {
     return a >>= b;
 }
 
@@ -805,65 +767,3 @@ std::istream& operator>>(std::istream &s, big_integer &a) {
     a = big_integer(d);
     return s;
 }
-
-
-template <typename T>
-void erase_unordered(std::vector<T>& v, typename std::vector<T>::iterator pos)
-{
-    std::swap(v.back(), *pos);
-    v.pop_back();
-}
-
-template <typename T>
-T extract_random_element(std::vector<T>& v)
-{
-    size_t index = rand() % v.size();
-    T copy = v[index];
-    erase_unordered(v, v.begin() + index);
-    return copy;
-}
-
-
-template <typename T>
-void merge_two(std::vector<T>& v)
-{
-    assert(v.size() >= 2);
-
-    T a = extract_random_element(v);
-    T b = extract_random_element(v);
-
-    T ab = a * b;
-    cout << a << ' ' << b << "\n";
-    assert(ab / a == b);
-    assert(ab / b == a);
-
-    v.push_back(ab);
-}
-
-template <typename T>
-T merge_all(std::vector<T> v)
-{
-    assert(!v.empty());
-
-    while (v.size() >= 2)
-        merge_two(v);
-
-    return v[0];
-}
-//int main() {
-////    vector<big_integer> v = {-430978730, 692328763, 590472204, 830750726, 189642432};
-//    big_integer x("11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111");
-//    big_integer y("22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222");
-//    cout << x << ' ' << y << "\n";
-//    y /= x;
-//    cout << y << "\n";
-////    cout << x << "\n";
-////    cout << x * y << "\n";
-////    cout << 830750726 * 590472204ll << "\n";
-////    big_integer x = merge_all(v);
-////    big_integer y = merge_all(v);
-////    for (auto x : v) {
-//
-////    }
-//
-//}

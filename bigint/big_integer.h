@@ -54,18 +54,16 @@ friend int main();
 
 
 
-private:
+//private:
 
     struct vector {
         struct node {
             unsigned *s;
             unsigned capacity;
-            node (unsigned capacity, unsigned *d);
-
-            void update_capacity(unsigned, unsigned, bool);
-            void ensure_capacity(unsigned);
         };
 
+        void update_capacity(unsigned, unsigned);
+        void ensure_capacity(unsigned);
         const static unsigned SIGN_BIT = 30;
         const static unsigned MODE_BIT = 31;
         const static unsigned SIZE_CONST = ~0 ^ (1 << SIGN_BIT) ^ (1 << MODE_BIT);
@@ -84,11 +82,9 @@ private:
 
         vector(unsigned, unsigned, int sign);
         vector& operator=(vector const &other);
-        union SMO {
+        union {
             node x;
-            unsigned s[SMALL_OBJECT_SIZE];
-            SMO(unsigned capacity, unsigned value);
-//            SMO()
+            unsigned small[SMALL_OBJECT_SIZE];
         };
 
         void push_back(unsigned);
@@ -117,9 +113,8 @@ private:
 
         unsigned& operator[](unsigned ind);
         unsigned const operator[](unsigned ind) const;
-
-        SMO v;
         unsigned sz;
+        unsigned* def;
     } data;
 
     friend void swap(vector&, vector&);
