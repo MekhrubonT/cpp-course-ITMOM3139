@@ -2,6 +2,9 @@
 #include <vector>
 #include <string>
 #include <cmath>
+#include <cassert>
+#include <algorithm>
+#include <iostream>
 #include "big_integer.h"
 
 #include <cstring>
@@ -12,25 +15,37 @@ using namespace std;
 const int64_t BASEPOW = 32;
 const uint64_t BASE = (1ll << BASEPOW);
 const int64_t NEEDEDBITS = BASE - 1;
+std::shared_ptr<big_integer::value_type> reseted;
 
 big_integer::vector::vector() : sz(0) {
     memset(small, 0, sizeof(small));
+}
+
+std::shared_ptr<big_integer::value_type> make_shared_array(big_integer::value_type* d) {
+    try {
+        return std::shared_ptr<big_integer::value_type>
+                    (d, [](big_integer::value_type* p) { delete[] p; });
+    } catch (std::bad_alloc e) {
+        delete[] d;
+        throw;
+    }
 }
 
 big_integer::vector::vector(value_type sz, value_type value, int sg = 0) : sz(sz) {
     memset(small, 0, sizeof(small));
     if (sz > big_integer::vector::SMALL_OBJECT_SIZE) {
         x.capacity = sz;
-        x.s = new value_type[sz];
+        x.s = make_shared_array(new value_type[sz]);
     }
-    fill(begin(), begin() + sz, value);
-    set_sign(sg);
     set_mode(size() <= SMALL_OBJECT_SIZE ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
+    set_sign(sg);
+    fill(begin(), begin() + sz, value);
 }
 
 big_integer::vector::~vector() {
     if (mode() != SMALL_OBJECT) {
-        delete[] x.s;
+        x.s.reset()
+        ;
     }
 }
 
@@ -38,7 +53,7 @@ big_integer::vector::vector(const big_integer::vector& other) : sz(other.sz) {
     memset(small, 0, sizeof(small));
     if (mode() != SMALL_OBJECT) {
         x.capacity = size();
-        x.s = new value_type[size()];
+        x.s = make_shared_array(new value_type[size()]);
     }
     copy(other.begin(), other.end(), begin());
 }
@@ -59,7 +74,7 @@ void swap(big_integer::vector &a, big_integer::vector &b) {
 
 void big_integer::vector::clear() {
     if (mode() != SMALL_OBJECT)
-        delete[] x.s;
+        x.s.reset();
     memset(small, 0, sizeof(small));
     sz = 0;
 }
@@ -96,13 +111,13 @@ const big_integer::value_type big_integer::vector::operator[](value_type ind) co
 }
 
 big_integer::value_type* big_integer::vector::begin() {
-    return (mode() == SMALL_OBJECT ? small : x.s);
+    return (mode() == SMALL_OBJECT ? small : x.s.get());
 }
 big_integer::value_type* big_integer::vector::end() {
     return begin() + size();
 }
 big_integer::value_type const* big_integer::vector::begin() const {
-    return (mode() == SMALL_OBJECT ? small : x.s);
+    return (mode() == SMALL_OBJECT ? small : x.s.get());
 }
 big_integer::value_type const* big_integer::vector::end() const {
     return begin() + size();
@@ -124,30 +139,30 @@ void big_integer::vector::set_sign(value_type x) {
 
 
 void big_integer::vector::flip_to_small_object() {
-    value_type* d = x.s;
-    memcpy(small, d, sizeof(small));
-    delete[] d;
+    auto d = x.s;
+    x.s.reset();
+    memcpy(small, d.get(), sizeof(small));
+    d.reset();
     set_mode(SMALL_OBJECT);
 }
 
 void big_integer::vector::flip_from_small_object(value_type old_size, value_type capacity = 10) {
-//cout << "capacity=" << capacity << "\n";
     value_type *d = new value_type[capacity];
     memset(d, 0, sizeof(value_type) * capacity);
     memcpy(d, small, sizeof(small));
-    set_mode(SMALL_OBJECT ^ 1);
     x.capacity = capacity;
-    x.s = d;
+    memcpy(&x, &reseted, sizeof(reseted));
+    x.s = make_shared_array(d);
+    set_mode(SMALL_OBJECT ^ 1);
 }
 
 
 void big_integer::vector::update_capacity(value_type new_capacity, value_type copy_size) {
-//cout << "capacity=" << new_capacity << "\n";
     value_type* d = new value_type[new_capacity];
     memset(d, 0, sizeof(value_type) * new_capacity);
-    memcpy(d, x.s, sizeof(value_type) * copy_size);
-    delete[] x.s;
-    x.s = d;
+    memcpy(d, x.s.get(), sizeof(value_type) * copy_size);
+    x.s.reset();
+    x.s = make_shared_array(d);
 }
 
 void big_integer::vector::ensure_capacity(value_type new_size) {
@@ -155,8 +170,8 @@ void big_integer::vector::ensure_capacity(value_type new_size) {
         update_capacity(x.capacity << 1, x.capacity);
         x.capacity <<= 1;
     } else if (new_size * 4 < x.capacity) {
-//        update_capacity(x.capacity >> 1, x.capacity >> 1);
-//        x.capacity >>= 1;
+        update_capacity(x.capacity >> 1, x.capacity >> 1);
+        x.capacity >>= 1;
     }
 }
 
@@ -169,7 +184,7 @@ void big_integer::vector::push_back(value_type d) {
         small[size()] = d;
     } else {
         ensure_capacity(size() + 1);
-        x.s[size()] = d;
+        x.s.get()[size()] = d;
     }
     sz++;
 }
@@ -469,7 +484,7 @@ big_integer rightShift(const big_integer::vector &a, int shift)
 int big_integer::sign() const {
     return data.sign();
 }
-big_integer::   value_type big_integer::size() const {
+big_integer::value_type big_integer::size() const {
     return data.size();
 }
 int big_integer::mode() const {
@@ -521,13 +536,20 @@ big_integer::big_integer(std::string const& str) {
     value_type mod = 0;
     while (temp.size() != 1 || temp[0] != 0)
     {
+
         mod = shortDivMod(10, BASE, temp, temp, mod);
+////        cout << mod << " ";
         data.push_back(mod);
     }
+////    cout << "\n";
+////    for (auto x : data)
+////        cout << x << ' ';
+////    cout << "\n";
     data.set_sign(normalize(data, data.sign()));
 }
 
-big_integer::~big_integer() {}
+big_integer::~big_integer() {
+}
 
 big_integer& big_integer::operator=(big_integer const& other)
 {
@@ -731,3 +753,15 @@ std::istream& operator>>(std::istream &s, big_integer &a) {
     return s;
 }
 
+//int main() {
+////    big_integer::vector a;
+////    for (int i = 0; i < 11; i++) {
+////        a.push_back(q[i]);
+////        }
+////    big_integer a("100000000000000000000000000000000000000000000000");
+////    cout << "\n\n#######ok\n";
+////    big_integer b(                                                     "100000000000000000000000000000000000000");
+////    big_integer c("10000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000");
+//
+////    assert(a + b == c);
+//}

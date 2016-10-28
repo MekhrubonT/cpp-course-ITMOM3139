@@ -1,6 +1,7 @@
 #ifndef BIG_INTEGER_H
 #define BIG_INTEGER_H
 
+#include <memory>
 // Список инициализации
 
 struct big_integer {
@@ -50,16 +51,11 @@ friend int main();
 
 
     friend std::string to_string(big_integer const& a);
-
-
-
-
-
 //private:
-
+//
     struct vector {
         struct node {
-            value_type *s;
+            std::shared_ptr<value_type> s;
             value_type capacity;
         };
 
@@ -82,8 +78,8 @@ friend int main();
         vector(value_type, value_type, int sign);
         vector& operator=(vector const &other);
         union {
-            node x;
             value_type small[SMALL_OBJECT_SIZE];
+            node x;
         };
 
         void push_back(value_type);
@@ -113,7 +109,6 @@ friend int main();
         value_type& operator[](value_type ind);
         value_type const operator[](value_type ind) const;
         value_type sz;
-//        value_type* def;
     };
     vector data;
 
@@ -182,7 +177,6 @@ big_integer operator^(big_integer a, big_integer const& b);
 big_integer operator<<(big_integer a, int b);
 
 big_integer operator>>(big_integer a, int b);
-
 
 std::ostream& operator<<(std::ostream& s, big_integer const& a);
 #endif // BIG_INTEGER_H
