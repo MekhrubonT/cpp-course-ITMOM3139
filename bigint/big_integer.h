@@ -5,6 +5,7 @@
 
 struct big_integer {
 friend int main();
+    typedef unsigned value_type;
 
     big_integer();
 
@@ -58,73 +59,72 @@ friend int main();
 
     struct vector {
         struct node {
-            unsigned *s;
-            unsigned capacity;
+            value_type *s;
+            value_type capacity;
         };
 
-        void update_capacity(unsigned, unsigned);
-        void ensure_capacity(unsigned);
-        const static unsigned SIGN_BIT = 30;
-        const static unsigned MODE_BIT = 31;
-        const static unsigned SIZE_CONST = ~0 ^ (1 << SIGN_BIT) ^ (1 << MODE_BIT);
-        const static unsigned SMALL_OBJECT = 0;
-        const static unsigned SMALL_OBJECT_SIZE = sizeof(node) / sizeof(unsigned);
+        void update_capacity(value_type, value_type);
+        void ensure_capacity(value_type);
+        const static value_type SIGN_BIT = sizeof(value_type) * 8 - 2;
+        const static value_type MODE_BIT = sizeof(value_type) * 8 - 1;
+        const static value_type SIZE_CONST = ~0 ^ (1 << SIGN_BIT) ^ (1 << MODE_BIT);
+        const static value_type SMALL_OBJECT = 0;
+        const static value_type SMALL_OBJECT_SIZE = sizeof(node) / sizeof(value_type);
 
         void flip_to_small_object();
-        void flip_from_small_object(unsigned, unsigned);
+        void flip_from_small_object(value_type, value_type);
 
         vector();
         ~vector();
-        template <typename T>
-        vector(const T& x);
         vector(const vector& x);
 
 
-        vector(unsigned, unsigned, int sign);
+        vector(value_type, value_type, int sign);
         vector& operator=(vector const &other);
         union {
             node x;
-            unsigned small[SMALL_OBJECT_SIZE];
+            value_type small[SMALL_OBJECT_SIZE];
         };
 
-        void push_back(unsigned);
-        void insert(unsigned*, int x);
-        void resize(unsigned);
+        void push_back(value_type);
+        void insert(value_type*, int x);
+        void resize(value_type);
         void pop_back();
         void clear();
 
-        unsigned size() const;
+        value_type size() const;
         int sign() const;
         int mode() const;
 
-        void set_size(unsigned d);
-        void set_mode(unsigned x);
-        void set_sign(unsigned x);
+        void set_size(value_type d);
+        void set_mode(value_type x);
+        void set_sign(value_type x);
 
-        unsigned& back();
-        const unsigned back() const;
+        value_type& back();
+        const value_type back() const;
         bool empty() const;
 
 
-        unsigned* begin();
-        unsigned const* begin() const;
-        unsigned* end();
-        unsigned const* end() const;
+        value_type* begin();
+        value_type const* begin() const;
+        value_type* end();
+        value_type const* end() const;
 
-        unsigned& operator[](unsigned ind);
-        unsigned const operator[](unsigned ind) const;
-        unsigned sz;
-        unsigned* def;
-    } data;
+        value_type& operator[](value_type ind);
+        value_type const operator[](value_type ind) const;
+        value_type sz;
+//        value_type* def;
+    };
+    vector data;
 
     friend void swap(vector&, vector&);
     friend vector to_byte(int sign, vector v);
 
     int sign() const;
-    unsigned size() const;
+    value_type size() const;
     int mode() const;
-    void set_sign(unsigned);
-    void set_size(unsigned);
+    void set_sign(value_type);
+    void set_size(value_type);
     void set_mode(int);
 
     enum operation { XOR, OR, AND };
@@ -144,12 +144,8 @@ friend int main();
     friend void subtract(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b);
     friend void multiplyShort(big_integer::vector&, const big_integer::vector&, uint64_t);
     friend void multiply(big_integer::vector&, const big_integer::vector&, const big_integer::vector&);
-    friend unsigned shortDivMod(const int64_t, const int64_t, const big_integer::vector&, big_integer::vector&, unsigned);
+    friend value_type shortDivMod(const int64_t, const int64_t, const big_integer::vector&, big_integer::vector&, value_type);
     friend void longDiv(big_integer::vector&, const big_integer::vector, const big_integer::vector&);
-
-
-//    int signum; // private
-//    std::vector<unsigned> v; // private
 };
 
 void swap(big_integer::vector& a, big_integer::vector& b);

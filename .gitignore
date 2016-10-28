@@ -1,0 +1,9 @@
+bigint/CMakeFiles
+*.o
+bigint/big_integer
+bigint/big_integer_testing
+bigint/Makefile
+bigint/CMakeCache.txt
+bigint/cmake_install.cmake
+bigint/perf.data
+bigint/perf.data.old

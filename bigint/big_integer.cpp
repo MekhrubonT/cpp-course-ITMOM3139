@@ -10,27 +10,22 @@
 using namespace std;
 
 const int64_t BASEPOW = 32;
-const int64_t BASE = (1ll << BASEPOW);
+const uint64_t BASE = (1ll << BASEPOW);
 const int64_t NEEDEDBITS = BASE - 1;
 
 big_integer::vector::vector() : sz(0) {
     memset(small, 0, sizeof(small));
-    def = small;
 }
 
-big_integer::vector::vector(unsigned sz, unsigned value, int sg = 0) : sz(0) {
-    if (sz <= big_integer::vector::SMALL_OBJECT_SIZE) {
-        memset(small, 0, sizeof(small));
-        fill(small, small + sz, value);
-        def = small;
-    } else {
+big_integer::vector::vector(value_type sz, value_type value, int sg = 0) : sz(sz) {
+    memset(small, 0, sizeof(small));
+    if (sz > big_integer::vector::SMALL_OBJECT_SIZE) {
         x.capacity = sz;
-        def = x.s = new unsigned[sz];
-        fill(x.s, x.s + sz, value);
+        x.s = new value_type[sz];
     }
-    set_size(sz);
+    fill(begin(), begin() + sz, value);
     set_sign(sg);
-    set_mode(sz <= SMALL_OBJECT_SIZE ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
+    set_mode(size() <= SMALL_OBJECT_SIZE ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
 }
 
 big_integer::vector::~vector() {
@@ -39,50 +34,33 @@ big_integer::vector::~vector() {
     }
 }
 
-template <typename T>
-big_integer::vector::vector(const T& other) {
-    set_size(other.size());
-    set_sign(0);
-    set_mode(size() <= SMALL_OBJECT_SIZE ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
-    if (mode() == SMALL_OBJECT) {
-        copy(other.begin(), other.end(), small);
-        def = small;
-    } else {
+big_integer::vector::vector(const big_integer::vector& other) : sz(other.sz) {
+    memset(small, 0, sizeof(small));
+    if (mode() != SMALL_OBJECT) {
         x.capacity = size();
-        def = x.s = new unsigned[size()];
-        copy(other.begin(), other.end(), x.s);
+        x.s = new value_type[size()];
     }
-}
-big_integer::vector::vector(const big_integer::vector& other) {
-    set_size(other.size());
-    set_sign(other.sign());
-    set_mode(size() <= 3 ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
-    if (mode() == SMALL_OBJECT) {
-        memcpy(small, other.begin(), sizeof(unsigned) * other.size());
-        def = small;
-    } else {
-        x.capacity = size();
-        def = x.s = new unsigned[size()];
-        memcpy(x.s, other.begin(), sizeof(unsigned) * other.size());
-    }
+    copy(other.begin(), other.end(), begin());
 }
 
 
 big_integer::vector& big_integer::vector::operator=(vector const &other) {
-    if (begin() != other.begin()) {
-        clear();
-        for (auto x : other)
-            push_back(x);
-        set_sign(other.sign());
-    }
+    big_integer::vector cur(other);
+    swap(*this, cur);
     return *this;
 }
+
+void swap(big_integer::vector &a, big_integer::vector &b) {
+    swap(a.sz, b.sz);
+    for (big_integer::value_type i = 0; i < big_integer::vector::SMALL_OBJECT_SIZE; i++)
+        swap(a.small[i], b.small[i]);
+}
+
 
 void big_integer::vector::clear() {
     if (mode() != SMALL_OBJECT)
         delete[] x.s;
     memset(small, 0, sizeof(small));
-    def = small;
     sz = 0;
 }
 
@@ -93,7 +71,7 @@ int big_integer::vector::sign() const {
 int big_integer::vector::mode() const {
     return (sz >> MODE_BIT) & 1;
 }
-unsigned big_integer::vector::size() const {
+big_integer::value_type big_integer::vector::size() const {
     return sz & SIZE_CONST;
 }
 
@@ -101,88 +79,89 @@ bool big_integer::vector::empty() const {
     return size() == 0;
 }
 
-unsigned& big_integer::vector::back() {
+big_integer::value_type& big_integer::vector::back() {
     return operator[](size() - 1);
 }
 
-const unsigned big_integer::vector::back() const {
+const big_integer::value_type big_integer::vector::back() const {
     return operator[](size() - 1);
 }
 
-unsigned& big_integer::vector::operator[](unsigned ind) {
+big_integer::value_type& big_integer::vector::operator[](value_type ind) {
     return *(begin() + ind);
 }
 
-const unsigned big_integer::vector::operator[](unsigned ind) const {
+const big_integer::value_type big_integer::vector::operator[](value_type ind) const {
     return *(begin() + ind);
 }
 
-unsigned* big_integer::vector::begin() {
-    return mode() == SMALL_OBJECT ? small : x.s;
+big_integer::value_type* big_integer::vector::begin() {
+    return (mode() == SMALL_OBJECT ? small : x.s);
 }
-unsigned* big_integer::vector::end() {
+big_integer::value_type* big_integer::vector::end() {
     return begin() + size();
 }
-unsigned const* big_integer::vector::begin() const {
-    return mode() == SMALL_OBJECT ? small : x.s;
+big_integer::value_type const* big_integer::vector::begin() const {
+    return (mode() == SMALL_OBJECT ? small : x.s);
 }
-unsigned const* big_integer::vector::end() const {
+big_integer::value_type const* big_integer::vector::end() const {
     return begin() + size();
 }
 
-void big_integer::vector::set_size(unsigned d) {
+void big_integer::vector::set_size(value_type d) {
     sz = d | (sign() << SIGN_BIT) | (mode() << MODE_BIT);
 }
 
-void big_integer::vector::set_mode(unsigned x) {
+void big_integer::vector::set_mode(value_type x) {
     assert(x == SMALL_OBJECT || x == (SMALL_OBJECT ^ 1));
     sz = (sz & ~(1ll << MODE_BIT)) | (x << MODE_BIT);
 }
 
-void big_integer::vector::set_sign(unsigned x) {
+void big_integer::vector::set_sign(value_type x) {
     assert(x <= 1);
     sz = (sz & ~(1ll << SIGN_BIT)) | (x << SIGN_BIT);
 }
 
 
 void big_integer::vector::flip_to_small_object() {
-    unsigned* d = x.s;
+    value_type* d = x.s;
     memcpy(small, d, sizeof(small));
     delete[] d;
-    def = small;
     set_mode(SMALL_OBJECT);
 }
 
-void big_integer::vector::flip_from_small_object(unsigned old_size, unsigned capacity = 10) {
-    unsigned *d = new unsigned[capacity];
-    memset(d, 0, sizeof(unsigned) * capacity);
+void big_integer::vector::flip_from_small_object(value_type old_size, value_type capacity = 10) {
+//cout << "capacity=" << capacity << "\n";
+    value_type *d = new value_type[capacity];
+    memset(d, 0, sizeof(value_type) * capacity);
     memcpy(d, small, sizeof(small));
     set_mode(SMALL_OBJECT ^ 1);
     x.capacity = capacity;
-    def = x.s = d;
+    x.s = d;
 }
 
 
-void big_integer::vector::update_capacity(unsigned new_capacity, unsigned copy_size) {
-    unsigned* d = new unsigned[new_capacity];
-    memset(d, 0, sizeof(unsigned) * new_capacity);
-    memcpy(d, x.s, sizeof(unsigned) * copy_size);
+void big_integer::vector::update_capacity(value_type new_capacity, value_type copy_size) {
+//cout << "capacity=" << new_capacity << "\n";
+    value_type* d = new value_type[new_capacity];
+    memset(d, 0, sizeof(value_type) * new_capacity);
+    memcpy(d, x.s, sizeof(value_type) * copy_size);
     delete[] x.s;
-    def = x.s = d;
+    x.s = d;
 }
 
-void big_integer::vector::ensure_capacity(unsigned new_size) {
+void big_integer::vector::ensure_capacity(value_type new_size) {
     if (new_size > x.capacity) {
         update_capacity(x.capacity << 1, x.capacity);
         x.capacity <<= 1;
     } else if (new_size * 4 < x.capacity) {
-        update_capacity(x.capacity >> 1, x.capacity >> 1);
-        x.capacity >>= 1;
+//        update_capacity(x.capacity >> 1, x.capacity >> 1);
+//        x.capacity >>= 1;
     }
 }
 
 
-void big_integer::vector::push_back(unsigned d) {
+void big_integer::vector::push_back(value_type d) {
     if (size() == SMALL_OBJECT_SIZE) {
         flip_from_small_object(SMALL_OBJECT_SIZE);
     }
@@ -194,11 +173,11 @@ void big_integer::vector::push_back(unsigned d) {
     }
     sz++;
 }
-void big_integer::vector::insert(unsigned* place, int x) {
-    unsigned pos = place - begin();
+void big_integer::vector::insert(value_type* place, int x) {
+    value_type pos = place - begin();
     push_back(x);
     place = pos + begin();
-    unsigned* it = end() - 1;
+    value_type* it = end() - 1;
     while (it > place) {
         swap(*it, *(it - 1));
         it--;
@@ -215,27 +194,11 @@ void big_integer::vector::pop_back() {
     }
 }
 
-void big_integer::vector::resize(unsigned new_size) {
-//    if (mode() == SMALL_OBJECT && new_size > SMALL_OBJECT_SIZE) {
-//        flip_from_small_object(size(), new_size);
-//        set_size(new_size);
-//    } else if (mode() != SMALL_OBJECT && x.capacity * 2 <= new_size){
-//        update_capacity(new_size, size());
-//        x.capacity = new_size;
-//        set_size(new_size);
-//    } else if (mode() != SMALL_OBJECT && x.capacity > 2 * new_size) {
-//        int d = max(SMALL_OBJECT_SIZE + 1, new_size);
-//        update_capacity(d, d);
-//        x.capacity = d;
-//        set_size(d);
-//        while (size() > new_size)
-//            pop_back();
-//    } else {
-        while (size() < new_size)
-            push_back(0);
-        while (size() > new_size)
-            pop_back();
-//    }
+void big_integer::vector::resize(value_type new_size) {
+    while (size() < new_size)
+        push_back(0);
+    while (size() > new_size)
+        pop_back();
 }
 
 int normalize(big_integer::vector &a, int signum = 0)
@@ -243,7 +206,7 @@ int normalize(big_integer::vector &a, int signum = 0)
     if (a.empty()) {
         a.push_back(0);
     } else {
-        unsigned pos = a.size() - 1;
+        big_integer::value_type pos = a.size() - 1;
         while (pos && a[pos] == 0)
         {
             pos--;
@@ -275,10 +238,10 @@ int comp(big_integer const& a, big_integer const& b, bool absCompare = false) {
 void add(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b)
 {
     uint64_t carry = 0;
-    unsigned asize = a.size();
-    unsigned bsize = b.size();
+    big_integer::value_type asize = a.size();
+    big_integer::value_type bsize = b.size();
     res.resize(max(a.size(), b.size()));
-    for (unsigned it = 0; it < max(a.size(), b.size()); ++it)
+    for (big_integer::value_type it = 0; it < max(a.size(), b.size()); ++it)
     {
         carry += (int64_t) (it < asize ? a[it] : 0) + (it < bsize ? b[it] : 0);
         res[it] = carry & NEEDEDBITS;
@@ -293,10 +256,10 @@ void add(big_integer::vector &res, const big_integer::vector &a, const big_integ
 void subtract(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b)
 {
     int64_t carry = 0, ncarry;
-    unsigned asize = a.size();
-    unsigned bsize = b.size();
+    big_integer::value_type asize = a.size();
+    big_integer::value_type bsize = b.size();
     res.resize(asize);
-    for (unsigned it = 0; it < asize; it++) {
+    for (big_integer::value_type it = 0; it < asize; it++) {
         ncarry = 0;
         carry = a[it] - carry - (it < bsize ? b[it] : 0);
         if (carry < 0) {
@@ -314,7 +277,7 @@ void multiplyShort(big_integer::vector &res, const big_integer::vector &a, uint6
 {
     res.resize(a.size());
     uint64_t x = 0;
-    for (unsigned i = 0; i < a.size(); i++) {
+    for (big_integer::value_type i = 0; i < a.size(); i++) {
         x += (uint64_t) a[i] * b;
         res[i] = (x & NEEDEDBITS);
         x >>= BASEPOW;
@@ -328,22 +291,22 @@ void multiply(big_integer::vector &res, const big_integer::vector &a, const big_
 {
     vector<uint64_t> buf(a.size() + b.size() + 1, 0);
     uint64_t x;
-    for (unsigned i = 0; i < a.size(); i++) {
-        for (unsigned j = 0; j < b.size(); j++) {
+    for (big_integer::value_type i = 0; i < a.size(); i++) {
+        for (big_integer::value_type j = 0; j < b.size(); j++) {
             x = (uint64_t)a[i] * b[j] + buf[i + j];
             buf[i + j + 1] += (x >> BASEPOW);
             buf[i + j] = (x & NEEDEDBITS);
         }
     }
     res.resize(buf.size() - 1);
-    for (unsigned i = 0; i + 1 < buf.size(); i++) {
+    for (big_integer::value_type i = 0; i + 1 < buf.size(); i++) {
         buf[i + 1] += (buf[i] >> BASEPOW);
         res[i] = (buf[i] & NEEDEDBITS);
     }
     normalize(res, 0);
 }
 
-unsigned shortDivMod(const int64_t dividendBase, const int64_t divider, const big_integer::vector &a, big_integer::vector & res, unsigned mod = 0)
+big_integer::value_type shortDivMod(const int64_t dividendBase, const int64_t divider, const big_integer::vector &a, big_integer::vector & res, big_integer::value_type mod = 0)
 {
     int64_t cur = 0;
     res.resize(a.size());
@@ -362,7 +325,7 @@ void longDiv(big_integer::vector &res, const big_integer::vector a, const big_in
 {
     if (a.size() < b.size())
     {
-        res = std::initializer_list<unsigned>({0});
+        res = big_integer::vector(1, 0);
         return;
     }
 
@@ -377,15 +340,16 @@ void longDiv(big_integer::vector &res, const big_integer::vector a, const big_in
     fill(res.begin(), res.end(), 0);
     for(int it = (int)a.size() - 1; it >= 0; it--) {
         pref.insert(pref.begin(), a[it]);
-        int64_t l = 1, r = comp(pref, b) >= 0 ? BASE : 1;
+        uint64_t l = 1, r = 0;
+        for (int i = pref.size(); i >= (int)b.size(); i--)
+            r = (r << BASEPOW) + pref[i - 1];
+        r = min(BASE, r / b.back() + 1);
         while (l < r)
         {
             int64_t mid = (l + r) >> 1;
             multiplyShort(temp, b, mid);
-            if (comp(pref, temp) >= 0)
-            {
+            if (comp(pref, temp, true) >= 0)
                 l = mid + 1;
-            }
             else
             {
                 r = mid;
@@ -429,7 +393,7 @@ big_integer from_byte(big_integer::vector &v) {
         sign = 1;
         v[0]--;
         bool flag = false;
-        for(unsigned i = 0; i + 1 < v.size(); i++)
+        for(big_integer::value_type i = 0; i + 1 < v.size(); i++)
         {
             if (v[i] < 0)
             {
@@ -456,7 +420,7 @@ big_integer from_byte(big_integer::vector &v) {
 big_integer byteFunctionBigInteger(const big_integer::vector &a, const big_integer::vector &b, big_integer::operation op)
 {
     big_integer::vector res(max(a.size(), b.size()), 0);
-    for(unsigned i = 0; i < res.size(); i++)
+    for(big_integer::value_type i = 0; i < res.size(); i++)
     {
         switch(op)
         {
@@ -472,7 +436,7 @@ big_integer leftShift(const big_integer::vector &a, int shift)
 {
     big_integer::vector res(shift / BASEPOW, 0);
     uint64_t cur = 0;
-    unsigned last = a.back();
+    big_integer::value_type last = a.back();
     shift %= BASEPOW;
     for (auto x : a)
     {
@@ -505,17 +469,17 @@ big_integer rightShift(const big_integer::vector &a, int shift)
 int big_integer::sign() const {
     return data.sign();
 }
-unsigned big_integer::size() const {
+big_integer::   value_type big_integer::size() const {
     return data.size();
 }
 int big_integer::mode() const {
     return data.mode();
 }
 
-void big_integer::set_sign(unsigned x) {
+void big_integer::set_sign(value_type x) {
     data.set_sign(x);
 }
-void big_integer::set_size(unsigned x) {
+void big_integer::set_size(value_type x) {
     data.set_size(x);
 }
 void big_integer::set_mode(int x) {
@@ -554,7 +518,7 @@ big_integer::big_integer(std::string const& str) {
     }
 
     reverse(temp.begin(), temp.end());
-    unsigned mod = 0;
+    value_type mod = 0;
     while (temp.size() != 1 || temp[0] != 0)
     {
         mod = shortDivMod(10, BASE, temp, temp, mod);
@@ -745,12 +709,11 @@ bool operator>=(big_integer const& a, big_integer const& b) {
 std::string to_string(big_integer const& a) {
     string res;
     big_integer::vector v = a.data;
-    unsigned mod = 0;
+    big_integer::value_type mod = 0;
     while (v.size() != 1 || v[0] != 0) {
         mod = shortDivMod(BASE, 10, v, v, mod);
         res += (char)(mod + 48);
     }
-
     if (a.sign() == 1) {
        res += "-";
     }
@@ -767,3 +730,4 @@ std::istream& operator>>(std::istream &s, big_integer &a) {
     a = big_integer(d);
     return s;
 }
+
