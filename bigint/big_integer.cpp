@@ -44,18 +44,18 @@ big_integer::vector::vector(value_type sz, value_type value, int sg = 0) : sz(sz
 
 big_integer::vector::~vector() {
     if (mode() != SMALL_OBJECT) {
-        x.s.reset()
-        ;
+        x.s.reset();
     }
 }
 
 big_integer::vector::vector(const big_integer::vector& other) : sz(other.sz) {
-    memset(small, 0, sizeof(small));
-    if (mode() != SMALL_OBJECT) {
+    if (other.mode() != SMALL_OBJECT) {
         x.capacity = size();
-        x.s = make_shared_array(new value_type[size()]);
+        memcpy(&x.s, &reseted, sizeof(x.s));
+        x.s = other.x.s;
+    } else {
+        copy(other.begin(), other.begin() + SMALL_OBJECT_SIZE, begin());
     }
-    copy(other.begin(), other.end(), begin());
 }
 
 
@@ -71,14 +71,17 @@ void swap(big_integer::vector &a, big_integer::vector &b) {
         swap(a.small[i], b.small[i]);
 }
 
-
-void big_integer::vector::clear() {
-    if (mode() != SMALL_OBJECT)
-        x.s.reset();
-    memset(small, 0, sizeof(small));
-    sz = 0;
+void copy_or_not_comma_that_is_the_question(big_integer::vector &a) {
+//cout << a.mode()
+    if (a.mode() != big_integer::vector::SMALL_OBJECT && a.x.s.use_count() != 1) {
+        big_integer::vector other;
+        other.sz = a.sz;
+        other.x.capacity = a.x.capacity;
+        other.x.s = make_shared_array(new big_integer::value_type[a.size()]);
+        copy(a.begin(), a.end(), other.begin());
+        swap(a, other);
+    }
 }
-
 
 int big_integer::vector::sign() const {
     return (sz >> SIGN_BIT) & 1;
@@ -128,12 +131,10 @@ void big_integer::vector::set_size(value_type d) {
 }
 
 void big_integer::vector::set_mode(value_type x) {
-    assert(x == SMALL_OBJECT || x == (SMALL_OBJECT ^ 1));
     sz = (sz & ~(1ll << MODE_BIT)) | (x << MODE_BIT);
 }
 
 void big_integer::vector::set_sign(value_type x) {
-    assert(x <= 1);
     sz = (sz & ~(1ll << SIGN_BIT)) | (x << SIGN_BIT);
 }
 
@@ -150,9 +151,9 @@ void big_integer::vector::flip_from_small_object(value_type old_size, value_type
     value_type *d = new value_type[capacity];
     memset(d, 0, sizeof(value_type) * capacity);
     memcpy(d, small, sizeof(small));
-    x.capacity = capacity;
     memcpy(&x, &reseted, sizeof(reseted));
     x.s = make_shared_array(d);
+    x.capacity = capacity;
     set_mode(SMALL_OBJECT ^ 1);
 }
 
@@ -170,13 +171,15 @@ void big_integer::vector::ensure_capacity(value_type new_size) {
         update_capacity(x.capacity << 1, x.capacity);
         x.capacity <<= 1;
     } else if (new_size * 4 < x.capacity) {
+/* do not uncomment
         update_capacity(x.capacity >> 1, x.capacity >> 1);
-        x.capacity >>= 1;
+        x.capacity >>= 1; */
     }
 }
 
 
 void big_integer::vector::push_back(value_type d) {
+    copy_or_not_comma_that_is_the_question(*this);
     if (size() == SMALL_OBJECT_SIZE) {
         flip_from_small_object(SMALL_OBJECT_SIZE);
     }
@@ -188,7 +191,7 @@ void big_integer::vector::push_back(value_type d) {
     }
     sz++;
 }
-void big_integer::vector::insert(value_type* place, int x) {
+void big_integer::vector::insert(value_type* place, value_type x) {
     value_type pos = place - begin();
     push_back(x);
     place = pos + begin();
@@ -252,6 +255,7 @@ int comp(big_integer const& a, big_integer const& b, bool absCompare = false) {
 
 void add(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b)
 {
+    copy_or_not_comma_that_is_the_question(res);
     uint64_t carry = 0;
     big_integer::value_type asize = a.size();
     big_integer::value_type bsize = b.size();
@@ -270,6 +274,7 @@ void add(big_integer::vector &res, const big_integer::vector &a, const big_integ
 
 void subtract(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b)
 {
+    copy_or_not_comma_that_is_the_question(res);
     int64_t carry = 0, ncarry;
     big_integer::value_type asize = a.size();
     big_integer::value_type bsize = b.size();
@@ -290,6 +295,7 @@ void subtract(big_integer::vector &res, const big_integer::vector &a, const big_
 
 void multiplyShort(big_integer::vector &res, const big_integer::vector &a, uint64_t b)
 {
+    copy_or_not_comma_that_is_the_question(res);
     res.resize(a.size());
     uint64_t x = 0;
     for (big_integer::value_type i = 0; i < a.size(); i++) {
@@ -304,6 +310,7 @@ void multiplyShort(big_integer::vector &res, const big_integer::vector &a, uint6
 
 void multiply(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b)
 {
+    copy_or_not_comma_that_is_the_question(res);
     vector<uint64_t> buf(a.size() + b.size() + 1, 0);
     uint64_t x;
     for (big_integer::value_type i = 0; i < a.size(); i++) {
@@ -323,7 +330,8 @@ void multiply(big_integer::vector &res, const big_integer::vector &a, const big_
 
 big_integer::value_type shortDivMod(const int64_t dividendBase, const int64_t divider, const big_integer::vector &a, big_integer::vector & res, big_integer::value_type mod = 0)
 {
-    int64_t cur = 0;
+    copy_or_not_comma_that_is_the_question(res);
+    uint64_t cur = 0;
     res.resize(a.size());
     for (int it = (int)a.size() - 1; it >= 0; it--)
     {
@@ -338,6 +346,7 @@ big_integer::value_type shortDivMod(const int64_t dividendBase, const int64_t di
 
 void longDiv(big_integer::vector &res, const big_integer::vector a, const big_integer::vector &b)
 {
+    copy_or_not_comma_that_is_the_question(res);
     if (a.size() < b.size())
     {
         res = big_integer::vector(1, 0);
@@ -402,6 +411,7 @@ big_integer::vector to_byte(int sign, big_integer::vector v)
 }
 
 big_integer from_byte(big_integer::vector &v) {
+    copy_or_not_comma_that_is_the_question(v);
     int sign = 0;
     if (v.back() == NEEDEDBITS)
     {
@@ -429,8 +439,6 @@ big_integer from_byte(big_integer::vector &v) {
     v.set_sign(normalize(v, v.sign()));
     return big_integer(sign, v);
 }
-
-
 
 big_integer byteFunctionBigInteger(const big_integer::vector &a, const big_integer::vector &b, big_integer::operation op)
 {
@@ -538,13 +546,8 @@ big_integer::big_integer(std::string const& str) {
     {
 
         mod = shortDivMod(10, BASE, temp, temp, mod);
-////        cout << mod << " ";
         data.push_back(mod);
     }
-////    cout << "\n";
-////    for (auto x : data)
-////        cout << x << ' ';
-////    cout << "\n";
     data.set_sign(normalize(data, data.sign()));
 }
 
@@ -752,16 +755,3 @@ std::istream& operator>>(std::istream &s, big_integer &a) {
     a = big_integer(d);
     return s;
 }
-
-//int main() {
-////    big_integer::vector a;
-////    for (int i = 0; i < 11; i++) {
-////        a.push_back(q[i]);
-////        }
-////    big_integer a("100000000000000000000000000000000000000000000000");
-////    cout << "\n\n#######ok\n";
-////    big_integer b(                                                     "100000000000000000000000000000000000000");
-////    big_integer c("10000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000");
-//
-////    assert(a + b == c);
-//}

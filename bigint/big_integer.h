@@ -83,10 +83,9 @@ friend int main();
         };
 
         void push_back(value_type);
-        void insert(value_type*, int x);
+        void insert(value_type*, value_type x);
         void resize(value_type);
         void pop_back();
-        void clear();
 
         value_type size() const;
         int sign() const;
@@ -112,8 +111,9 @@ friend int main();
     };
     vector data;
 
+    friend void copy_or_not_comma_that_is_the_question(vector&);
     friend void swap(vector&, vector&);
-    friend vector to_byte(int sign, vector v);
+    friend vector to_byte(int, vector);
 
     int sign() const;
     value_type size() const;
