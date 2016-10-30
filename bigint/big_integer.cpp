@@ -12,9 +12,9 @@
 
 using namespace std;
 
-const int64_t BASEPOW = 32;
+const int64_t BASEPOW = sizeof(big_integer::value_type) * 8;
 const uint64_t BASE = (1ll << BASEPOW);
-const int64_t NEEDEDBITS = BASE - 1;
+const uint64_t NEEDEDBITS = BASE - 1;
 std::shared_ptr<big_integer::value_type> reseted;
 
 big_integer::vector::vector() : sz(0) {

@@ -5,7 +5,6 @@
 // Список инициализации
 
 struct big_integer {
-friend int main();
     typedef unsigned value_type;
 
     big_integer();
@@ -51,8 +50,8 @@ friend int main();
 
 
     friend std::string to_string(big_integer const& a);
-//private:
-//
+private:
+
     struct vector {
         struct node {
             std::shared_ptr<value_type> s;
@@ -132,8 +131,8 @@ friend int main();
 
 
     friend big_integer from_byte(vector&);
-    friend int comp(const big_integer::vector& a, const big_integer::vector &b, bool absCompare);
-    friend int comp(big_integer const& a, big_integer const& b, bool absCompare);
+    friend int comp(const big_integer::vector&, const big_integer::vector&, bool);
+    friend int comp(big_integer const&, big_integer const&, bool);
     friend int normalize(big_integer::vector&, int);
     friend void add(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b);
     friend void subtract(big_integer::vector &res, const big_integer::vector &a, const big_integer::vector &b);
