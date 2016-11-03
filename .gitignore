@@ -1,4 +1,6 @@
 bigint/CMakeFiles
+*.in
+*.out
 *.o
 bigint/big_integer
 bigint/big_integer_testing
