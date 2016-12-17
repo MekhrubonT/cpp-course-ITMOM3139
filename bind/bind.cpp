@@ -1,28 +1,17 @@
-#include <bits/stdc++.h>
+// #include <bits/stdc++.h>
 #include "bind.h"
+#include <iostream>
 
-using namespace std;
+using namespace hw_bind;
 
-int sum(int a, int b) {
-	return a + b;
-}
-
-template <typename T1, typename T2, typename T3, typename T4>
-void order_print(T1 a, T2 b, T3 c, T4 d) {
-	std::cout << a << ' ' << b << ' ' << c << ' ' << d << "\n";
-}
-
-
-void order_print(int (&a)[20]) {
-	for (auto x : a)
-		std::cout << x << ' ';
-}
+place_holder<1> _1;
+place_holder<2> _2;
+place_holder<3> _3;
 
 int main() {
-	auto mul2 = my_bind(sum, placeholder<1>(), placeholder<1>());
-	cout << mul2(100) << "\n";
-
-	auto rev_print = my_bind(order_print<string, char, double, int>, placeholder<4>(), placeholder<3>(), placeholder<2>(), 
-		placeholder<1>());
-	rev_print(1, 2., '3', "4");
+	auto f = [](int &a, int &b, int &c) {a = b = c = 0; return a + b + c;};
+	int a = 1, b = 2, c = 3;
+	auto g = bind(f, _1, _2, c);
+	std::cout << g(a, b) << "\n";
+	std::cout << a << ' ' << b << ' ' << c << "\n";
 }
