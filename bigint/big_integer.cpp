@@ -521,7 +521,7 @@ big_integer::big_integer(int sign, const vector &other) : data(other) {
 
 big_integer::big_integer(big_integer const& other) : data(other.data) {}
 
-big_integer::big_integer(int a) : data(1, abs(a), a < 0) {
+big_integer::big_integer(int a) : data(1, abs((int64_t) a), a < 0) {
 }
 
 big_integer ONE(1);
