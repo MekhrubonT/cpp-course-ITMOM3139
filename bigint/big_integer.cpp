@@ -35,7 +35,7 @@ big_integer::vector::vector(value_type sz, value_type value, int sg = 0) : sz(sz
     memset(small, 0, sizeof(small));
     if (sz > big_integer::vector::SMALL_OBJECT_SIZE) {
         x.capacity = sz;
-        x.s = make_shared_array(new value_type[sz]);
+        new (&x.s) std::shared_ptr<value_type>(make_shared_array(new value_type[sz]));
     }
     set_mode(size() <= SMALL_OBJECT_SIZE ? SMALL_OBJECT : SMALL_OBJECT ^ 1);
     set_sign(sg);
@@ -44,7 +44,7 @@ big_integer::vector::vector(value_type sz, value_type value, int sg = 0) : sz(sz
 
 big_integer::vector::~vector() {
     if (mode() != SMALL_OBJECT) {
-        x.s.reset();
+        x.s.~shared_ptr();
     }
 }
 
@@ -141,7 +141,8 @@ void big_integer::vector::set_sign(value_type x) {
 
 void big_integer::vector::flip_to_small_object() {
     auto d = x.s;
-    x.s.reset();
+    // x.s.reset();
+    x.s.~shared_ptr();
     memcpy(small, d.get(), sizeof(small));
     d.reset();
     set_mode(SMALL_OBJECT);
@@ -151,8 +152,9 @@ void big_integer::vector::flip_from_small_object(value_type old_size, value_type
     value_type *d = new value_type[capacity];
     memset(d, 0, sizeof(value_type) * capacity);
     memcpy(d, small, sizeof(small));
-    memcpy(&x, &reseted, sizeof(reseted));
-    x.s = make_shared_array(d);
+    // memcpy(&x, &reseted, sizeof(reseted));
+    // x.s = make_shared_array(d);
+    new (&x.s) std::shared_ptr<value_type>(make_shared_array(d));
     x.capacity = capacity;
     set_mode(SMALL_OBJECT ^ 1);
 }
