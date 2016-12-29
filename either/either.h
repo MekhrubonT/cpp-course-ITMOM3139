@@ -36,36 +36,24 @@ namespace either_m {
 	template<typename Left, typename Right>
 	struct either {
 		either(Left arg) : type(LEFT) {
-			new (&data) Left(arg);
+			new (&data) Left(std::move(arg));
 		}
 		either(Right arg) : type(RIGHT) {
-			new (&data) Right(arg);
+			new (&data) Right(std::move(arg));
 		}
 
 		either(either const& other) : type(get_base(other.type)) {
 			if (other.is_left()) {
-				new (&data) Left(std::forward<const Left&>(other.left()));
+				new (&data) Left(other.left());
 			} else {
-				new (&data) Right(std::forward<const Right&>(other.right()));
+				new (&data) Right(other.right());
 			}
 		}
 		either(either&& other) : type(get_base(other.type)) {
 			if (other.is_left()) {
-				new (&data) Left(std::forward<Left&&>(other.left()));
+				new (&data) Left(std::move(other.left()));
 			} else {
-				new (&data) Right(std::forward<Right&&>(other.right()));
-			}
-		}
-
-		void clear_data() {
-			if (type == LEFT) {
-				reinterpret_cast<Left*>(&data)->~Left();
-			} else if (type == RIGHT) {
-				reinterpret_cast<Right*>(&data)->~Right();
-			} else if (type == LEFT_H) {
-				reinterpret_cast<std::unique_ptr<Left>*>(&data)->~unique_ptr();
-			} else {
-				reinterpret_cast<std::unique_ptr<Right>*>(&data)->~unique_ptr();
+				new (&data) Right(std::move(other.right()));
 			}
 		}
 
@@ -85,11 +73,13 @@ namespace either_m {
 			return get_base(type) == LEFT;
 		}
 		Left& left() {
+			assert(type == LEFT);
 			if (type == LEFT)
 				return *reinterpret_cast<Left*>(&data);
 			return **reinterpret_cast<std::unique_ptr<Left>*>(&data);
 		}
 		Left const& left() const {
+			assert(type == LEFT);
 			if (type == LEFT)
 				return *reinterpret_cast<Left const*>(&data);
 			return **reinterpret_cast<std::unique_ptr<const Left> const*>(&data);
@@ -99,11 +89,13 @@ namespace either_m {
 			return get_base(type) == RIGHT;
 		}
 		Right& right() {
+			assert(type == RIGHT);
 			if (type == RIGHT)
 				return *reinterpret_cast<Right*>(&data);
 			return **reinterpret_cast<std::unique_ptr<Right>*>(&data);
 		}
 		Right const& right() const {
+			assert(type == RIGHT);
 			if (type == RIGHT)
 				return *reinterpret_cast<Right const*>(&data);
 			return **reinterpret_cast<std::unique_ptr<Right const> const*>(&data);
@@ -131,7 +123,7 @@ namespace either_m {
 
 		template<typename... Args>
 		void emplace(emplace_right_t, Args&&... args) {
-			if (std::is_nothrow_constructible<Right, Args...>::value || is_heap(type)) {
+			if (std::is_nothrow_constructible<Right, Args...>::value) {
 				emplace<Right>(std::forward<Args>(args)...);
 				type = RIGHT;
 			} else if (type == LEFT) {
@@ -148,10 +140,11 @@ namespace either_m {
 
 private:
 
-		template<typename SLeft, typename SRight, typename Rlhs, typename Rrhs> 
-		friend void swapImpl(either<SLeft, SRight> &lhs, either<SLeft, SRight> &rhs,
-				const Rlhs ldata, const Rrhs rdata,
-				type_t const& ltype, type_t const& rtype);
+
+	template<typename FLeft, typename FRight, typename Rlhs, typename Rrhs> 
+	friend void swapImpl(either<FLeft, FRight> &lhs, either<FLeft, FRight> &rhs,
+		std::unique_ptr<Rlhs> ldata, std::unique_ptr<Rrhs> rdata,
+		type_t const& ltype, type_t const& rtype);
 
 		template<typename Type, typename... Args>
 		void emplace(Args&&... args) {
@@ -166,7 +159,7 @@ private:
 				clear_data();
 				new (&data) NType(std::forward<Args> (args)...);					
 				type = newType;
-			} catch (std::exception e) {
+			} catch (...) {
 				type = heap(newType);
 				new (&data) std::unique_ptr<Type>(tmp.release());
 				throw;
@@ -177,6 +170,20 @@ private:
 		typedef typename std::aligned_storage<std::max({sizeof(std::unique_ptr<Left>), sizeof(Left), sizeof(Right)}), 
 								std::max({alignof(std::unique_ptr<Left>), alignof(Left), alignof(Right)})>::type
 								data_t;
+	
+		void clear_data() {
+			if (type == LEFT) {
+				reinterpret_cast<Left*>(&data)->~Left();
+			} else if (type == RIGHT) {
+				reinterpret_cast<Right*>(&data)->~Right();
+			} else if (type == LEFT_H) {
+				reinterpret_cast<std::unique_ptr<Left>*>(&data)->~unique_ptr();
+			} else {
+				reinterpret_cast<std::unique_ptr<Right>*>(&data)->~unique_ptr();
+			}
+		}
+
+
 		type_t type;
 		data_t data;	
 	};
@@ -203,35 +210,39 @@ private:
 
 	template<typename Left, typename Right, typename Rlhs, typename Rrhs> 
 	void swapImpl(either<Left, Right> &lhs, either<Left, Right> &rhs,
-		const Rlhs ldata, const Rrhs rdata,
+		std::unique_ptr<Rlhs> ldata, std::unique_ptr<Rrhs> rdata,
 		type_t const& ltype, type_t const& rtype) {
 
 		try {
 			lhs.clear_data();
-			new (&lhs.data) Rrhs(rdata);
+			new (&lhs.data) Rrhs(*rdata);
 			lhs.type = rtype;
 			rhs.clear_data();
-			new (&rhs.data) Rlhs(ldata);
+			new (&rhs.data) Rlhs(*ldata);
 			rhs.type = ltype;
-		} catch (std::exception e){
+		} catch (...){
 			lhs.type = heap(ltype);
 			rhs.type = heap(rtype);
-			new (&lhs.data) std::unique_ptr<Rlhs>(std::make_unique<Rlhs>(ldata));
-			new (&rhs.data) std::unique_ptr<Rrhs>(std::make_unique<Rrhs>(rdata));
+			new (&lhs.data) std::unique_ptr<Rlhs>(ldata.release());
+			new (&rhs.data) std::unique_ptr<Rrhs>(rdata.release());
 			throw;
 		}
 	}
 
+
+
 	template<typename Left, typename Right>	
 	void swap(either<Left, Right> &lhs, either<Left, Right> &rhs) {
 		if (lhs.is_left() && rhs.is_left()) {
-			swapImpl(lhs, rhs, lhs.left(), rhs.left(), LEFT, LEFT);
+			swapImpl(lhs, rhs, std::make_unique<Left>(lhs.left()), std::make_unique<Left>(rhs.left()), LEFT, LEFT);
 		} else if (lhs.is_right() && rhs.is_left()) {
-			swapImpl(lhs, rhs, lhs.right(), rhs.left(), RIGHT, LEFT);
+			swapImpl(lhs, rhs, std::make_unique<Right>(lhs.right()), std::make_unique<Left>(rhs.left()), RIGHT, LEFT);
 		} else if (lhs.is_left() && rhs.is_right()) {
-			swapImpl(lhs, rhs, lhs.left(), rhs.right(), LEFT, RIGHT);
+			// std::unique_ptr<Left>(std::make_unique<Left>(lhs.left()));
+			swapImpl(lhs, rhs, std::unique_ptr<Left>(std::make_unique<Left>(lhs.left()))
+				, std::unique_ptr<Right>(std::make_unique<Right>(rhs.right())), LEFT, RIGHT);
 		} else {
-			swapImpl(lhs, rhs, lhs.right(), rhs.right(), RIGHT, RIGHT);
+			swapImpl(lhs, rhs, std::make_unique<Right>(lhs.right()), std::make_unique<Right>(rhs.right()), RIGHT, RIGHT);
 		}
 	}
 

@@ -30,6 +30,12 @@ int main() {
 	print(a);
 	print(b);
 	print(c);
+	swap(a, b);
+
+	print(a);
+	print(b);
+	print(c);
+
 
 	// cout << 
 	apply(d(), a)
