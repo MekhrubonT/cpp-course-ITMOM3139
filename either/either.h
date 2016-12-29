@@ -39,30 +39,34 @@ namespace either_m {
 			new (&data) Left(arg);
 		}
 		either(Right arg) : type(RIGHT) {
-			new (&data) Right(std::move(arg));
+			new (&data) Right(arg);
 		}
 
 		either(either const& other) : type(get_base(other.type)) {
 			if (other.is_left()) {
-				new (&data) Left(other.left());
+				new (&data) Left(std::forward<const Left&>(other.left()));
 			} else {
-				new (&data) Right(other.right());
+				new (&data) Right(std::forward<const Right&>(other.right()));
 			}
 		}
 		either(either&& other) : type(get_base(other.type)) {
 			if (other.is_left()) {
-				new (&data) Left(other.left());
+				new (&data) Left(std::forward<Left&&>(other.left()));
 			} else {
-				new (&data) Right(other.right());
+				new (&data) Right(std::forward<Right&&>(other.right()));
 			}
 		}
 
 		void clear_data() {
-			if (is_left()) {
+			if (type == LEFT) {
 				reinterpret_cast<Left*>(&data)->~Left();
-			} else {
+			} else if (type == RIGHT) {
 				reinterpret_cast<Right*>(&data)->~Right();
-			}			
+			} else if (type == LEFT_H) {
+				reinterpret_cast<std::unique_ptr<Left>*>(&data)->~unique_ptr();
+			} else {
+				reinterpret_cast<std::unique_ptr<Right>*>(&data)->~unique_ptr();
+			}
 		}
 
 		~either() {
@@ -110,7 +114,7 @@ namespace either_m {
 		template<typename... Args>
 		void emplace(emplace_left_t, Args&&... args) {
 			if (std::is_nothrow_constructible<Left, Args...>::value) {
-				emplace<Left>(args...);
+				emplace<Left>(std::forward<Args>(args)...);
 				type = LEFT;
 			} else if (type == LEFT) {
 				emplaceHeap<Left>(left(), LEFT, args...);
@@ -121,29 +125,26 @@ namespace either_m {
 		
 		template<typename... Args>
 		either(emplace_left_t, Args&&... args) : type(LEFT) {
-			new (&data) Left(args...);
+			new (&data) Left(std::forward<Args>(args)...);
 		}
 
 
 		template<typename... Args>
 		void emplace(emplace_right_t, Args&&... args) {
 			if (std::is_nothrow_constructible<Right, Args...>::value || is_heap(type)) {
-				emplace<Right>(args...);
+				emplace<Right>(std::forward<Args>(args)...);
 				type = RIGHT;
 			} else if (type == LEFT) {
-				emplaceHeap<Right>(left(), RIGHT, args...);
+				emplaceHeap<Right>(left(), RIGHT, std::forward<Args>(args)...);
 			} else {
-				emplaceHeap<Right>(right(), RIGHT, args...);				
+				emplaceHeap<Right>(right(), RIGHT, std::forward<Args>(args)...);				
 			}
 		}
 
 		template<typename... Args>
 		either(emplace_right_t, Args&&... args) : type(RIGHT) {
-			new (&data) Right(args...);
+			new (&data) Right(std::forward<Args>(args)...);
 		} 
-
-		template<typename SLeft, typename SRight>	
-		friend void swap(either<SLeft, SRight> &lhs, either<SLeft, SRight> &rhs);
 
 private:
 
@@ -155,7 +156,7 @@ private:
 		template<typename Type, typename... Args>
 		void emplace(Args&&... args) {
 			clear_data();
-			new (&data) Type(args...);
+			new (&data) Type(std::forward<Args>(args)...);
 		}	
 
 		template<typename NType, typename Type, typename... Args>
@@ -163,11 +164,12 @@ private:
 			auto tmp = std::make_unique<Type>(old);
 			try {
 				clear_data();
-				new (&data) NType(args...);					
+				new (&data) NType(std::forward<Args> (args)...);					
 				type = newType;
 			} catch (std::exception e) {
 				type = heap(newType);
 				new (&data) std::unique_ptr<Type>(tmp.release());
+				throw;
 			}	
 		}
 
@@ -216,6 +218,7 @@ private:
 			rhs.type = heap(rtype);
 			new (&lhs.data) std::unique_ptr<Rlhs>(std::make_unique<Rlhs>(ldata));
 			new (&rhs.data) std::unique_ptr<Rrhs>(std::make_unique<Rrhs>(rdata));
+			throw;
 		}
 	}
 
