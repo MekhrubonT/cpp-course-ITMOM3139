@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <algorithm>
 #include <memory>
-#include <bits/stdc++.h>
+#include <cassert>
 
 namespace either_m {
 	enum type_t { LEFT, RIGHT, LEFT_H, RIGHT_H};
@@ -238,9 +238,7 @@ private:
 		} else if (lhs.is_right() && rhs.is_left()) {
 			swapImpl(lhs, rhs, std::make_unique<Right>(lhs.right()), std::make_unique<Left>(rhs.left()), RIGHT, LEFT);
 		} else if (lhs.is_left() && rhs.is_right()) {
-			// std::unique_ptr<Left>(std::make_unique<Left>(lhs.left()));
-			swapImpl(lhs, rhs, std::unique_ptr<Left>(std::make_unique<Left>(lhs.left()))
-				, std::unique_ptr<Right>(std::make_unique<Right>(rhs.right())), LEFT, RIGHT);
+			swapImpl(lhs, rhs, std::make_unique<Left>(lhs.left()), std::make_unique<Right>(rhs.right()), LEFT, RIGHT);
 		} else {
 			swapImpl(lhs, rhs, std::make_unique<Right>(lhs.right()), std::make_unique<Right>(rhs.right()), RIGHT, RIGHT);
 		}

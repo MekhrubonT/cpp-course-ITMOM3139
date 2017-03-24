@@ -9,3 +9,6 @@ bigint/CMakeCache.txt
 bigint/cmake_install.cmake
 bigint/perf.data
 bigint/perf.data.old
+bind/nik.cpp
+bind/sor.cpp
+
